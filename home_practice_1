@@ -1,0 +1,235 @@
+import math
+class Angle:
+    def __init__(self, radians):
+        self.radians = radians
+
+    @classmethod
+    def from_radians(cls, radians):
+        return cls(radians)
+
+    @classmethod
+    def from_degrees(cls, degrees):
+        return cls(math.radians(degrees))
+
+    def get_radians(self):
+        return self.radians
+
+    def set_radians(self, radians):
+        self.radians = radians
+
+    def get_degrees(self):
+        return math.degrees(self.radians)
+
+    def set_degrees(self, degrees):
+        self.radians = math.radians(degrees)
+
+    def __str__(self):
+        return f"{self.get_degrees():.2f}°"
+
+    def __repr__(self):
+        return f"Angle({self.radians})"
+
+    def norm(self):
+        return self.radians % (2 * math.pi)
+
+    def __eq__(self, other):
+        return math.isclose(self.norm(), other.norm(), abs_tol=1e-9)
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __lt__(self, other):
+        return self.norm() < other.norm()
+
+    def __le__(self, other):
+        return self < other or self == other
+
+    def __gt__(self, other):
+        return self.norm() > other.norm()
+
+    def __ge__(self, other):
+        return self > other or self == other
+
+    def __float__(self):
+        return float(self.radians)
+
+    def __int__(self):
+        return int(self.radians)
+
+    def __add__(self, other):
+        if isinstance(other, Angle):
+            return Angle(self.radians + other.radians)
+
+        return Angle(self.radians + other)
+
+    def __sub__(self, other):
+        if isinstance(other, Angle):
+            return Angle(self.radians - other.radians)
+
+        return Angle(self.radians - other)
+
+    def __mul__(self, number):
+        return Angle(self.radians * number)
+
+    def __truediv__(self, number):
+        return Angle(self.radians / number)
+
+
+class AngleRange:
+    def __init__(self,start,end,include_start=True,include_end=True):
+        if isinstance(start, (int, float)):
+            start = Angle(start)
+
+        if isinstance(end, (int, float)):
+            end = Angle(end)
+
+        self.start = start
+        self.end = end
+        self.include_start = include_start
+        self.include_end = include_end
+
+    def __str__(self):
+        left = "[" if self.include_start else "("
+        right = "]" if self.include_end else ")"
+
+        return f"{left}{self.start}, {self.end}{right}"
+
+    def __repr__(self):
+        return (f"AngleRange({self.start!r}, "f"{self.end!r}, "f"{self.include_start}, "f"{self.include_end})")
+
+    def __abs__(self):
+        start = self.start.norm()
+        end = self.end.norm()
+        if end >= start:
+            return end - start
+        return 2 * math.pi - start + end
+
+    def __eq__(self, other):
+        return (self.start == other.start and self.end == other.end and self.include_start == other.include_start and self.include_end == other.include_end)
+
+    def __contains__(self, value):
+        if isinstance(value, (Angle, int, float)):
+            if isinstance(value, (int, float)):
+                value = Angle(value)
+
+            x = value.norm()
+            start = self.start.norm()
+            end = self.end.norm()
+
+            if start <= end:
+                left = x > start or (self.include_start and x == start)
+                right = x < end or (self.include_end and x == end)
+                return left and right
+            return x >= start or x <= end
+        if isinstance(value, AngleRange):
+            return value.start in self and value.end in self
+
+        return False
+
+    def __lt__(self, other):
+        return abs(self) < abs(other)
+
+    def __le__(self, other):
+        return abs(self) <= abs(other)
+
+    def __gt__(self, other):
+        return abs(self) > abs(other)
+
+    def __ge__(self, other):
+        return abs(self) >= abs(other)
+
+    def __add__(self, other):
+        return [AngleRange(self.start + other.start,self.end + other.end)]
+
+    def __sub__(self, other):
+        return [AngleRange(self.start - other.end,self.end - other.start)]
+
+
+print("angle")
+a = Angle.from_degrees(30)
+b = Angle.from_degrees(60)
+
+print("a =", a)
+print("b =", b)
+
+print("Радианы:", a.get_radians())
+print("Градусы:", a.get_degrees())
+
+a.set_degrees(90)
+print("После set_degrees:", a)
+
+a.set_radians(math.pi)
+print("После set_radians:", a)
+
+print("30° == 390°:",Angle.from_degrees(30) == Angle.from_degrees(390))
+
+print("float(a):", float(a))
+print("int(a):", int(a))
+
+print(
+    "30° + 60°:",
+    Angle.from_degrees(30) + Angle.from_degrees(60)
+)
+
+print(
+    "30° + 1 радиан:",
+    Angle.from_degrees(30) + 1
+)
+
+print(
+    "60° - 30°:",
+    Angle.from_degrees(60) - Angle.from_degrees(30)
+)
+
+print(
+    "30° * 2:",
+    Angle.from_degrees(30) * 2
+)
+
+print(
+    "60° / 2:",
+    Angle.from_degrees(60) / 2
+)
+
+print()
+print("angle range")
+
+r1 = AngleRange(
+    Angle.from_degrees(30),
+    Angle.from_degrees(90)
+)
+
+r2 = AngleRange(
+    Angle.from_degrees(40),
+    Angle.from_degrees(80),
+    False,
+    True
+)
+
+print("r1 =", r1)
+print("r2 =", r2)
+
+print("Длина r1:", abs(r1))
+
+print("r1 == r2:", r1 == r2)
+
+print(
+    "60° входит в r1:",
+    Angle.from_degrees(60) in r1
+)
+
+print(
+    "20° входит в r1:",
+    Angle.from_degrees(20) in r1
+)
+
+print("r2 входит в r1:", r2 in r1)
+
+print("r1 < r2:", r1 < r2)
+print("r1 > r2:", r1 > r2)
+
+print("r1 + r2:")
+print(r1 + r2)
+
+print("r1 - r2:")
+print(r1 - r2)
