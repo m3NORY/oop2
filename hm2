@@ -1,0 +1,134 @@
+from enum import Enum
+
+
+# Цвета
+class Color(Enum):
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    BLUE = "\033[34m"
+    YELLOW = "\033[33m"
+    RESET = "\033[0m"
+
+
+class Printer:
+
+    def __init__(self, color, position, symbol="*"):
+        self.color = color
+        self.x = position[0]
+        self.y = position[1]
+        self.symbol = symbol
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        print(Color.RESET.value)
+
+    # Статический способ
+    @classmethod
+    def print(cls, text, color, position, symbol="*"):
+        x, y = position
+
+        # Печатаем пустые строки до нужного Y
+        print("\n" * (y - 1), end="")
+
+        # Печатаем пробелы до нужного X
+        print(" " * (x - 1), end="")
+
+        print(color.value + text + Color.RESET.value)
+
+    # Обычный вывод
+    def print_text(self, text):
+        print("\n" * (self.y - 1), end="")
+        print(" " * (self.x - 1), end="")
+
+        print(self.color.value + text + Color.RESET.value)
+
+    # Большой текст
+    def print_big(self, text, filename):
+
+        font = {}
+
+        # Открываем файл со шрифтом
+        with open(filename, "r", encoding="utf-8") as file:
+            lines = file.readlines()
+
+        i = 0
+
+        # Загружаем буквы
+        while i < len(lines):
+
+            if lines[i].strip() == "":
+                i += 1
+                continue
+
+            letter = lines[i].strip()
+            i += 1
+
+            font[letter] = []
+
+            while i < len(lines) and lines[i].strip() != "":
+                font[letter].append(lines[i].rstrip())
+                i += 1
+
+        # Высота буквы
+        height = len(font[text[0].upper()])
+
+        # Переходим на нужную строку
+        print("\n" * (self.y - 1), end="")
+
+        # Выводим большой текст
+        for row in range(height):
+
+            # X-координата
+            print(" " * (self.x - 1), end="")
+
+            print(self.color.value, end="")
+
+            for letter in text.upper():
+
+                if letter in font:
+                    line = font[letter][row]
+
+                    # Меняем # на выбранный символ
+                    line = line.replace("#", self.symbol)
+
+                    print(line, end="  ")
+
+            print(Color.RESET.value)
+
+
+# =====================================
+# ПРОВЕРКА
+# =====================================
+
+# 1. Статический способ
+Printer.print(
+    "Привет!",
+    Color.GREEN,
+    (5, 2)
+)
+
+
+# 2. Обычный текст
+with Printer(Color.BLUE, (10, 8), "*") as printer:
+
+    printer.print_text("Обычный текст")
+
+
+# 3. Большой текст
+with Printer(Color.RED, (5, 12), "@") as printer:
+
+    printer.print_big(
+        "ABC",
+        "font5.txt"
+    )
+
+
+# 4. Шрифт высотой 7
+with Printer(Color.YELLOW, (5, 22), "#") as printer:
+
+    printer.print_big(
+        "ABC",
+        "font7.txt"
+    )
