@@ -47,7 +47,7 @@ def print_big(self, text, filename):
             font[letter].append(lines[i].rstrip("\n"))
             i += 1
 
-    height = len(font[text[0].upper()])
+    height = len(font["A"])
 
     print("\n" * (self.y - 1), end="")
 
@@ -61,6 +61,7 @@ def print_big(self, text, filename):
             if letter in font:
                 line = font[letter][row]
                 line = line.replace("*", self.symbol)
-                print(line, end="  ")
+
+                print(line, end="   ")
 
         print(Color.RESET.value)
