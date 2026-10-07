@@ -1,0 +1,167 @@
+from abc import ABC, abstractmethod
+from typing import Callable, Self
+import sympy
+
+
+class IntegralCalcer(ABC):
+    __slots__ = ()
+
+    @abstractmethod
+    def calc(self, f: Callable[[float], float], a: float, b: float) -> float:
+        pass
+
+    def __str__(self) -> str:
+        return "IntegralCalcer"
+
+    def __repr__(self) -> str:
+        return "IntegralCalcer()"
+
+    @classmethod
+    def from_config(cls, config: dict) -> Self:
+        return cls(**config)
+
+    def _validate_bounds(self, a: float, b: float) -> None:
+        if a >= b:
+            raise ValueError("Должно быть a < b")
+
+
+class RectangularCalcer(IntegralCalcer):
+    __slots__ = ("_n",)
+
+    def __init__(self, n: int) -> None:
+        if n <= 0:
+            raise ValueError("n должно быть больше 0")
+        self._n = n
+
+    def calc(
+        self,
+        f: Callable[[float], float],
+        a: float,
+        b: float
+    ) -> float:
+        self._validate_bounds(a, b)
+
+        h = (b - a) / self._n
+        result = 0.0
+
+        for i in range(self._n):
+            x = a + (i + 0.5) * h
+            result += f(x)
+
+        return result * h
+
+    def __str__(self) -> str:
+        return f"RectangularCalcer(n={self._n})"
+
+    def __repr__(self) -> str:
+        return f"RectangularCalcer(n={self._n})"
+
+
+class SimpsonCalcer(IntegralCalcer):
+    __slots__ = ("_n",)
+
+    def __init__(self, n: int) -> None:
+        if n <= 0:
+            raise ValueError("n должно быть больше 0")
+        if n % 2 != 0:
+            raise ValueError("n должно быть чётным")
+        self._n = n
+
+    def calc(
+        self,
+        f: Callable[[float], float],
+        a: float,
+        b: float
+    ) -> float:
+        self._validate_bounds(a, b)
+
+        h = (b - a) / self._n
+        result = f(a) + f(b)
+
+        for i in range(1, self._n):
+            x = a + i * h
+
+            if i % 2 == 0:
+                result += 2 * f(x)
+            else:
+                result += 4 * f(x)
+
+        return result * h / 3
+
+    def __str__(self) -> str:
+        return f"SimpsonCalcer(n={self._n})"
+
+    def __repr__(self) -> str:
+        return f"SimpsonCalcer(n={self._n})"
+
+
+class AnalyticCalcer(IntegralCalcer):
+    __slots__ = ("_symbol",)
+
+    def __init__(self, symbol: str = "x") -> None:
+        self._symbol = symbol
+
+    def calc(
+        self,
+        f: sympy.Expr | str,
+        a: float,
+        b: float
+    ) -> float:
+        self._validate_bounds(a, b)
+
+        if isinstance(f, str):
+            expr = sympy.sympify(f)
+        else:
+            expr = f
+
+        x = sympy.Symbol(self._symbol)
+        result = sympy.integrate(expr, (x, a, b))
+
+        if result.has(sympy.Integral):
+            raise ValueError("Не удалось вычислить интеграл")
+
+        return float(result)
+
+    def __str__(self) -> str:
+        return f"AnalyticCalcer(symbol='{self._symbol}')"
+
+    def __repr__(self) -> str:
+        return f"AnalyticCalcer(symbol='{self._symbol}')"
+
+
+def f(x: float) -> float:
+    return x ** 2
+
+
+a = 0.0
+b = 1.0
+
+rectangular = RectangularCalcer(100)
+simpson = SimpsonCalcer(100)
+analytic = AnalyticCalcer()
+
+result_rectangular = rectangular.calc(f, a, b)
+result_simpson = simpson.calc(f, a, b)
+result_analytic = analytic.calc("x**2", a, b)
+
+print("Метод прямоугольников:", result_rectangular)
+print("Метод Симпсона:", result_simpson)
+print("Аналитически:", result_analytic)
+
+print("Погрешность прямоугольников:",
+      abs(result_rectangular - result_analytic))
+
+print("Погрешность Симпсона:",
+      abs(result_simpson - result_analytic))
+
+try:
+    rectangular.new_attribute = 10
+except AttributeError:
+    print("Нельзя добавить новый атрибут")
+
+analytic2 = AnalyticCalcer.from_config({
+    "symbol": "x"
+})
+
+print(analytic2)
+print(analytic2.calc("x**2", 0, 1))
