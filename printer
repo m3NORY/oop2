@@ -28,30 +28,27 @@ def print_big(self, text, filename):
     font = {}
 
     with open(filename, "r", encoding="utf-8") as file:
-        lines = file.readlines()
 
-    i = 0
+        while True:
+            line = file.readline()
 
-    while i < len(lines):
+            if not line:
+                break
 
-        if lines[i].strip() == "":
-            i += 1
-            continue
+            letter = line.strip()
 
-        letter = lines[i].strip()
-        i += 1
+            if letter == "":
+                continue
 
-        font[letter] = []
+            font[letter] = []
 
-        while i < len(lines) and lines[i].strip() != "":
-            font[letter].append(lines[i].rstrip("\n"))
-            i += 1
-
-    height = len(font["A"])
+            for i in range(5):
+                line = file.readline()
+                font[letter].append(line.rstrip("\n"))
 
     print("\n" * (self.y - 1), end="")
 
-    for row in range(height):
+    for row in range(5):
 
         print(" " * (self.x - 1), end="")
         print(self.color.value, end="")
@@ -61,7 +58,6 @@ def print_big(self, text, filename):
             if letter in font:
                 line = font[letter][row]
                 line = line.replace("*", self.symbol)
-
                 print(line, end="   ")
 
         print(Color.RESET.value)
