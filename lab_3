@@ -1,0 +1,195 @@
+
+from enum import Enum
+from typing import Protocol
+from datetime import datetime
+import re
+import socket
+import ftplib
+import logging
+
+class LogLevel(Enum):
+    INFO = "INFO"
+    WARN = "WARN"
+    ERROR = "ERROR"
+
+
+class LogFilterProtocol(Protocol):
+
+    def match(self, log_level: LogLevel, text: str) -> bool:
+        ...
+
+
+class SimpleLogFilter:
+
+    def __init__(self, pattern):
+        self.pattern = pattern.lower()
+
+    def match(self, log_level: LogLevel, text: str) -> bool:
+        return self.pattern in text.lower()
+
+
+class ReLogFilter:
+
+    def __init__(self, pattern):
+        self.pattern = pattern
+
+    def match(self, log_level: LogLevel, text: str) -> bool:
+        return re.search(self.pattern, text) is not None
+
+
+class LevelFilter:
+
+    def __init__(self, level):
+        self.level = level
+
+    def match(self, log_level: LogLevel, text: str) -> bool:
+        return log_level == self.level
+
+
+class LogHandlerProtocol(Protocol):
+
+    def handle(self, log_level: LogLevel, text: str) -> None:
+        ...
+
+
+class ConsoleHandler:
+
+    def handle(self, log_level: LogLevel, text: str) -> None:
+        print(text)
+
+
+class FileHandler:
+
+    def __init__(self, filename):
+        self.filename = filename
+
+    def handle(self, log_level: LogLevel, text: str) -> None:
+        with open(self.filename, "a", encoding="utf-8") as file:
+            file.write(text + "\n")
+
+
+class SocketHandler:
+
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+
+    def handle(self, log_level: LogLevel, text: str) -> None:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                client.connect((self.host, self.port))
+                client.sendall(text.encode("utf-8"))
+        except OSError as error:
+            print("Ошибка отправки через сокет:", error)
+
+
+class SyslogHandler:
+
+    def __init__(self):
+        self.logger = logging.getLogger("MyLogger")
+        self.logger.setLevel(logging.INFO)
+
+    def handle(self, log_level: LogLevel, text: str) -> None:
+        if log_level == LogLevel.INFO:
+            self.logger.info(text)
+        elif log_level == LogLevel.WARN:
+            self.logger.warning(text)
+        elif log_level == LogLevel.ERROR:
+            self.logger.error(text)
+
+
+class FtpHandler:
+
+    def __init__(self, host, username, password, filename):
+        self.host = host
+        self.username = username
+        self.password = password
+        self.filename = filename
+
+    def handle(self, log_level: LogLevel, text: str) -> None:
+        try:
+            with ftplib.FTP(self.host) as ftp:
+                ftp.login(self.username, self.password)
+
+                from io import BytesIO
+                data = BytesIO((text + "\n").encode("utf-8"))
+
+                ftp.storbinary(
+                    "APPE " + self.filename,
+                    data
+                )
+
+        except OSError as error:
+            print("Ошибка FTP:", error)
+        except ftplib.all_errors as error:
+            print("Ошибка FTP:", error)
+
+
+class LogFormatterProtocol(Protocol):
+
+    def format(self, log_level: LogLevel, text: str) -> str:
+        ...
+
+
+class LogFormatter:
+
+    def format(self, log_level: LogLevel, text: str) -> str:
+        current_time = datetime.now().strftime("%Y.%m.%d %H:%M:%S")
+
+        return f"[{log_level.value}] [{current_time}] {text}"
+
+
+class Logger:
+
+    def __init__(self, filters, formatters, handlers):
+        self.filters = filters
+        self.formatters = formatters
+        self.handlers = handlers
+
+    def log(self, log_level: LogLevel, text: str) -> None:
+
+        for log_filter in self.filters:
+            if not log_filter.match(log_level, text):
+                return
+
+        for formatter in self.formatters:
+            text = formatter.format(log_level, text)
+
+        for handler in self.handlers:
+            handler.handle(log_level, text)
+
+    def log_info(self, text: str) -> None:
+        self.log(LogLevel.INFO, text)
+
+    def log_warn(self, text: str) -> None:
+        self.log(LogLevel.WARN, text)
+
+    def log_error(self, text: str) -> None:
+        self.log(LogLevel.ERROR, text)
+
+
+if __name__ == "__main__":
+
+    filters = [
+        SimpleLogFilter("система"),
+        ReLogFilter(r"\w+"),
+        LevelFilter(LogLevel.INFO)
+    ]
+
+    formatters = [
+        LogFormatter()
+    ]
+
+    handlers = [
+        ConsoleHandler(),
+        FileHandler("logs.txt"),
+        SyslogHandler()
+    ]
+
+    logger = Logger(filters, formatters, handlers)
+
+    logger.log_info("Работает система логирования")
+    logger.log_info("Система запущена успешно")
+
+    logger.log_warn("Система работает с предупреждением")
+    logger.log_error("Ошибка в системе")
