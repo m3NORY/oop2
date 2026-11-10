@@ -1,0 +1,252 @@
+
+import json
+import time
+from abc import ABC, abstractmethod
+from typing import Protocol, Any, Callable
+from functools import wraps
+
+def log_calls(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+        print(f"{type(self).__name__}.{method.__name__} начинается")
+
+        start_time = time.perf_counter()
+
+        result = method(self, *args, **kwargs)
+
+        end_time = time.perf_counter()
+        elapsed = end_time - start_time
+
+        print(f"{type(self).__name__}.{method.__name__} "
+              f"выполнен за {elapsed:.6f} секунд")
+
+        return result
+
+    return wrapper
+
+
+
+class Report:
+    __slots__ = ("title", "columns", "_rows")
+
+    def __init__(self, title: str, columns: list[str]) -> None:
+        self.title: str = title
+        self.columns: list[str] = columns.copy()
+        self._rows: list[dict[str, str]] = []
+
+    def add_row(self, row: dict[str, str]) -> None:
+        if set(row.keys()) != set(self.columns):
+            raise ValueError("Ключи строки не совпадают с колонками")
+
+        converted_row: dict[str, str] = {}
+
+        for column in self.columns:
+            converted_row[column] = str(row[column])
+
+        self._rows.append(converted_row)
+
+    def rows(self) -> list[dict[str, str]]:
+        return [row.copy() for row in self._rows]
+
+    @property
+    def rows_count(self) -> int:
+        return len(self._rows)
+
+    def __str__(self) -> str:
+        columns_text = ", ".join(self.columns)
+
+        return (f"Отчёт '{self.title}' "
+                f"({self.rows_count} строки, колонки: {columns_text})")
+
+    def __repr__(self) -> str:
+        return f"Report(title={self.title!r}, columns={self.columns!r})"
+
+
+
+class IReportExporter(ABC):
+    __slots__ = ()
+
+    @abstractmethod
+    def export(self, report: Report) -> str:
+        pass
+
+
+
+class JsonExporter(IReportExporter):
+    __slots__ = ()
+
+    @log_calls
+    def export(self, report: Report) -> str:
+        data: dict[str, Any] = {
+            "title": report.title,
+            "columns": report.columns,
+            "rows": report.rows()
+        }
+
+        return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+
+class CsvExporter(IReportExporter):
+    __slots__ = ()
+
+    @log_calls
+    def export(self, report: Report) -> str:
+        lines: list[str] = [";".join(report.columns)]
+
+        for row in report.rows():
+            lines.append(";".join(row[col] for col in report.columns))
+
+        return "\n".join(lines)
+
+
+class MarkdownExporter(IReportExporter):
+    __slots__ = ()
+
+    @log_calls
+    def export(self, report: Report) -> str:
+        header: str = "| " + " | ".join(report.columns) + " |"
+
+        separator: str = "| " + " | ".join(
+            "---" for _ in report.columns
+        ) + " |"
+
+        lines: list[str] = [header, separator]
+
+        for row in report.rows():
+            lines.append(
+                "| " + " | ".join(
+                    row[col] for col in report.columns
+                ) + " |"
+            )
+
+        return "\n".join(lines)
+
+
+
+class Saver(Protocol):
+    def save(self, path: str, content: str) -> None:
+        ...
+
+
+
+class FileSaver:
+    __slots__ = ()
+
+    def save(self, path: str, content: str) -> None:
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(content)
+
+        print(f"Файл сохранён: {path}")
+
+
+
+class ConsoleSaver:
+    __slots__ = ()
+
+    def save(self, path: str, content: str) -> None:
+        print(content)
+
+
+class MemorySaver:
+    __slots__ = ("storage",)
+
+    def __init__(self) -> None:
+        self.storage: dict[str, str] = {}
+
+    def save(self, path: str, content: str) -> None:
+        self.storage[path] = content
+
+
+
+class ReportPipeline:
+    __slots__ = ("_exporter", "_saver")
+
+    def __init__(self, exporter: IReportExporter,
+                 saver: Saver) -> None:
+        self._exporter: IReportExporter = exporter
+        self._saver: Saver = saver
+
+    def run(self, report: Report, path: str) -> None:
+        content: str = self._exporter.export(report)
+        self._saver.save(path, content)
+
+
+
+def main() -> None:
+
+    report = Report("Продажи", ["date", "product", "amount"])
+
+    report.add_row({
+        "date": "10.11.2026",
+        "product": "Ноутбук",
+        "amount": 75000
+    })
+
+    report.add_row({
+        "date": "10.11.2026",
+        "product": "Телефон",
+        "amount": 45000
+    })
+
+    report.add_row({
+        "date": "11.11.2026",
+        "product": "Монитор",
+        "amount": 25000
+    })
+
+    report.add_row({
+        "date": "11.11.2026",
+        "product": "Клавиатура",
+        "amount": 5000
+    })
+
+    report.add_row({
+        "date": "12.11.2026",
+        "product": "Мышь",
+        "amount": 2000
+    })
+
+    print("\n========== ИНФОРМАЦИЯ ОБ ОТЧЁТЕ ==========")
+    print(report)
+    print(repr(report))
+    print("Количество строк:", report.rows_count)
+
+    print("\n========== JSON ==========")
+
+    json_saver = FileSaver()
+    json_pipeline = ReportPipeline(JsonExporter(), json_saver)
+
+    json_pipeline.run(report, "report.json")
+
+    print("\n========== CSV ==========")
+
+    csv_saver = ConsoleSaver()
+    csv_pipeline = ReportPipeline(CsvExporter(), csv_saver)
+
+    csv_pipeline.run(report, "report.csv")
+
+    print("\n========== MARKDOWN ==========")
+
+    markdown_saver = MemorySaver()
+    markdown_pipeline = ReportPipeline(
+        MarkdownExporter(),
+        markdown_saver
+    )
+
+    markdown_pipeline.run(report, "report.md")
+
+    # ---------- MEMORY SAVER ----------
+    print("\n========== MEMORY SAVER ==========")
+
+    saver = MemorySaver()
+
+    pipeline = ReportPipeline(JsonExporter(), saver)
+    pipeline.run(report, "report.json")
+
+    print("\nСодержимое словаря MemorySaver:")
+    print(saver.storage["report.json"])
+
+
+if __name__ == "__main__":
+    main()
