@@ -1,0 +1,224 @@
+
+from typing import TypeVar, Protocol, Any
+
+TEventArgs = TypeVar("TEventArgs")
+
+
+class EventHandler(Protocol[TEventArgs]):
+
+    def handle(self, sender: object, args: TEventArgs) -> None:
+        ...
+
+
+class EventArgs:
+    pass
+
+
+class Event:
+
+    def __init__(self):
+        self.handlers = []
+
+    def __iadd__(self, handler):
+        self.handlers.append(handler)
+        return self
+
+    def __isub__(self, handler):
+        if handler in self.handlers:
+            self.handlers.remove(handler)
+        return self
+
+    def invoke(self, sender, args):
+        for handler in self.handlers:
+            handler.handle(sender, args)
+
+
+class PropertyChangedEventArgs(EventArgs):
+
+    def __init__(self, property_name: str):
+        self.property_name = property_name
+
+
+class PropertyChangingEventArgs(EventArgs):
+
+    def __init__(self, property_name: str, old_value: Any,
+                 new_value: Any):
+
+        self.property_name = property_name
+        self.old_value = old_value
+        self.new_value = new_value
+        self.can_change = True
+
+
+class PropertyChangedHandler:
+
+    def handle(self, sender, args: PropertyChangedEventArgs):
+        print(
+            f"Объект {type(sender).__name__}: "
+            f"свойство {args.property_name} успешно изменено"
+        )
+
+
+class PropertyChangingHandler:
+
+    def handle(self, sender, args: PropertyChangingEventArgs):
+
+        print(
+            f"{args.property_name}: "
+            f"{args.old_value} -> {args.new_value}"
+        )
+
+        if args.new_value is None:
+            print("Ошибка: значение не может быть None")
+            args.can_change = False
+
+        elif args.property_name == "age":
+            if not isinstance(args.new_value, int) or args.new_value < 0:
+                print("Ошибка: возраст должен быть положительным числом")
+                args.can_change = False
+
+        elif args.property_name == "price":
+            if not isinstance(args.new_value, (int, float)) or args.new_value <= 0:
+                print("Ошибка: цена должна быть больше нуля")
+                args.can_change = False
+
+        elif args.property_name == "name":
+            if not isinstance(args.new_value, str) or args.new_value.strip() == "":
+                print("Ошибка: имя не может быть пустым")
+                args.can_change = False
+
+        if args.can_change:
+            print("Проверка пройдена")
+
+
+class ObservableObject:
+
+    def __init__(self):
+        self.property_changing = Event()
+        self.property_changed = Event()
+
+    def set_property(self, property_name, old_value, new_value):
+
+        args = PropertyChangingEventArgs(
+            property_name,
+            old_value,
+            new_value
+        )
+
+        self.property_changing.invoke(self, args)
+
+        if not args.can_change:
+            print("Изменение отменено!\n")
+            return old_value
+
+        self.property_changed.invoke(
+            self,
+            PropertyChangedEventArgs(property_name)
+        )
+
+        return new_value
+
+
+
+class User(ObservableObject):
+
+    def __init__(self, name, age, email):
+        super().__init__()
+
+        self._name = name
+        self._age = age
+        self._email = email
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = self.set_property("name", self._name, value)
+
+    @property
+    def age(self):
+        return self._age
+
+    @age.setter
+    def age(self, value):
+        self._age = self.set_property("age", self._age, value)
+
+    @property
+    def email(self):
+        return self._email
+
+    @email.setter
+    def email(self, value):
+        self._email = self.set_property("email", self._email, value)
+
+
+class Product(ObservableObject):
+
+    def __init__(self, name, price, category):
+        super().__init__()
+
+        self._name = name
+        self._price = price
+        self._category = category
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = self.set_property("name", self._name, value)
+
+    @property
+    def price(self):
+        return self._price
+
+    @price.setter
+    def price(self, value):
+        self._price = self.set_property("price", self._price, value)
+
+    @property
+    def category(self):
+        return self._category
+
+    @category.setter
+    def category(self, value):
+        self._category = self.set_property("category", self._category, value)
+
+
+if __name__ == "__main__":
+
+    validator = PropertyChangingHandler()
+    observer = PropertyChangedHandler()
+
+    user = User("Иван", 20, "ivan@mail.ru")
+    product = Product("Телефон", 30000, "Электроника")
+
+    user.property_changing += validator
+    user.property_changed += observer
+
+    product.property_changing += validator
+    product.property_changed += observer
+
+    print("успешное")
+
+    user.age = 21
+    product.price = 35000
+
+    print("неудачное изменение")
+
+    user.age = -5
+    product.price = -100
+
+    print("отписка от события")
+
+    user.property_changed -= observer
+
+    user.name = "Петр"
+
+    print("текущие данные")
+
+    print(user.name, user.age, user.email)
+    print(product.name, product.price, product.category)
